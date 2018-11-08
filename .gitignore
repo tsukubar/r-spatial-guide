@@ -5,3 +5,4 @@
 node_modules/
 *.lock
 docs/.vuepress/dist/
+.env
