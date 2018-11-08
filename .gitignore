@@ -1,0 +1,7 @@
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+node_modules/
+*.lock
+docs/.vuepress/dist/
