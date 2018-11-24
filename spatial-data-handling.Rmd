@@ -1,0 +1,80 @@
+---
+title: "空間処理"
+home: false
+output:
+  html_document:
+    keep_md: true
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, 
+                      eval = TRUE,
+                      base.url = "docs/.vuepress/public/",
+                      fig.path = "images/")
+```
+
+地理空間データに限らず、表形式のデータ操作を行うのに
+
+便利な機能を提供する
+
+tidyverseと呼ばれるパッケージ群の紹介
+
+## この章で扱うデータ
+
+気象庁
+
+```{r}
+data("stations", package = "jmastats")
+```
+
+```{r, include = FALSE}
+dplyr::glimpse(stations)
+```
+
+
+## tidyverseに含まれるパッケージを使ったデータ操作
+
+sfオブジェクトだけでなく、テーブル形式のデータ操作に役立ちます。
+
+```{r}
+# remotes::install_git("https://gitlab.com/uribo/jmastats")
+library(jmastats)
+library(tidyverse)
+library(sf)
+```
+
+```{r}
+data("stations", package = "jmastats")
+```
+
+### dplyr::filter
+
+```{r}
+sf_stat <- 
+  stations %>% 
+  dplyr::filter(station_type == "四", 
+                pref_code %in% c(str_pad(seq(8, 14), 
+                                         width = 2, 
+                                         pad = "0")))
+```
+
+### dplyr::select
+
+```{r}
+sf_stat <- 
+  sf_stat %>% 
+  dplyr::select(area, station_no, elevation, prec_no, block_no, 
+                pref_code, address)
+```
+
+### dplyr::mutate
+
+```{r}
+sf_stat <- 
+  sf_stat %>% 
+  dplyr::mutate(address = str_replace_all(address,
+                                   "^(.+市|区|市|.+郡.+町).+", 
+                                   replacement = "\\1"))
+
+```
+

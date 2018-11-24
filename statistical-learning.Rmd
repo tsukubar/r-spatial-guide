@@ -1,0 +1,57 @@
+---
+title: "Spatial Analysis"
+home: false
+output:
+  html_document:
+    keep_md: true
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, 
+                      eval = TRUE,
+                      base.url = "docs/.vuepress/public/",
+                      fig.path = "images/")
+```
+
+## 空間自己相関
+
+```{r}
+library(tidyverse)
+library(sf)
+library(jpndistrict)
+
+df_h17to27_pops <- 
+  readr::read_rds(here::here("data-raw", "population_h17-h22.rds"))
+
+sf_pref08 <- 
+  jpn_pref(8, district = TRUE)
+  
+df_pref08_pops <- 
+  df_h17to27_pops %>% 
+  filter(pref_code == "08", year == 2015, city_type != "a") %>% 
+  select(city_code, population)
+
+sf_pref08_pops2015 <- 
+  sf_pref08 %>% 
+  inner_join(df_pref08_pops, 
+             by = c("city_code"))
+pops <- 
+  c(sf_pref08_pops2015$population)
+
+library(spdep)
+# NS
+moran.test(pops,
+           st_coordinates(st_centroid(sf_pref08_pops2015)) %>% 
+             tri2nb() %>% 
+             nb2listw()) %>% 
+  broom::tidy()
+# NS
+geary.test(pops,
+           st_coordinates(st_centroid(sf_pref08_pops2015)) %>% 
+             tri2nb() %>% 
+             nb2listw())
+```
+
+## ネットワーク分析
+
+## クリキング

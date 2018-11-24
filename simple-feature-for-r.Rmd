@@ -1,0 +1,581 @@
+---
+title: "Simple feature"
+home: false
+output:
+  html_document:
+    keep_md: true
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, 
+                      eval = TRUE,
+                      base.url = "docs/.vuepress/public/",
+                      fig.path = "images/")
+```
+
+## sfパッケージを用いてRでの空間データの取り扱いを学ぶ
+
+[Simple features](https://en.wikipedia.org/wiki/Simple_Features) あるいは [simple feature access](http://www.opengeospatial.org/standards/sfa) は、
+
+現実世界の地物をコンピュータ上で表現する、また、そのようなオブジェクトがどのようにデータベースに格納・参照するための国際規格(ISO-19125-1:2004)です。
+
+sfパッケージはsimple featureをRで扱うためのパッケージで、simple featureを作成するだけでなく、空間操作や多くの空間情報データを扱うファイルとの相互変換を可能にします。またPostGISからのデータ読み込みも可能なパッケージです。
+
+```{r}
+library(sf)
+```
+
+sfパッケージは、GISでよく利用される、
+GDALやGEOSをはじめとしたオープンソースのライブラリに依存します。そのためsfパッケージの利用にはこれらがあらかじめインストールされている必要があります。詳しくは[sfのインストール](https://github.com/r-spatial/sf/#installing)についてをご覧ください。
+
+sfパッケージの多くの関数は`st_`というプレフィックスがついています。これはspatial and temporalを意味しています。
+
+### simple feature geometry
+
+主要なgeometryを紹介します。これらはGeoJSONでもサポートされているものです。ここからは実際にsfの関数を使ってsimple feature geometryの作成例を見ていきましょう。
+
+| 種類 | 概略 |
+|------|------|
+| `POINT` | 単一の位置を示す |
+| `LINESTRING` | 2つ以上の位置の配列からなる線 |
+| `POLYGON` | 2次元のジオメトリ。複数のポイントを結ぶ線で構成され、これらは互いに交差せずに閉じている。|
+| `MULTIPOINT` | `POINT`の集合 |
+| `MULTILINESTRING` | `LINESTRING`の集合 |
+| `MULTIPOLYGON` | `POLYGON`の集合
+| `GEOMETRYCOLLECTION` | `GEOMETRYCOLLECTION`を除いたgeometryの組み合わせ |
+
+1. 単一のポイントは数値ベクトル
+2. ポイントを行列として表現することでLINESTRING, POLYGONを表現できる
+3. 他の組み合わせはリスト
+
+ポイントを定義する関数は`st_point()`です。ポイントの位置を引数に与えます。引数には最低でも2つの数値ベクトルを与えなければいけません。`st_point()`に与えられる数値は、座標に変換されます。すなわち、2次元のジオメトリとして機能します。
+
+```{r}
+# ポイントの作成
+p1 <- 
+  st_point(c(140.112, 36.083))
+
+# 標準出力されます
+p1
+
+# ジオメトリの確認
+p1 %>% 
+  st_geometry_type()
+```
+
+さて、先ほど`st_point()`の実行に最低2つの数値ベクトルの入力が必要と述べました。ではそれ以上の数値を与えた場合はどうなるのでしょう。答えは3次元、4次元と次元をジオメトリの次元を増やす表現として機能します。
+
+```{r}
+# st_point()にはポイントの座標を与えます
+st_point(c(1, 2)) # 2つの値はXY座標として利用されます
+st_point(c(1, 2, 3)) # XYに加え、Z座標を定義できます
+st_point(c(1, 2, 3), dim = "XYM")
+
+# dim引数を利用し、明示的に次元とその値を指定できます
+x <- 
+  st_point(c(1, 2, 3, 4)) # 4次元の座標には4つの値を与えます
+
+# Z/M座標を除外した座標値を返却します
+st_zm(x)
+```
+
+```{r}
+set.seed(123)
+mesh <- 
+  jpmesh::rmesh(1) %>% 
+  jpmesh::export_mesh()
+
+st_bbox(mesh)
+st_area(mesh)
+```
+
+### 座標参照系の指定
+
+sfgオブジェクトは座標を持ちますがあらかじめ座標参照系を含めることができません。
+
+```{r}
+library(mapview) # 位置把握のために使います
+st_crs(p1)
+
+# mapview(p1)
+
+st_sfc(p1, crs = 4326)
+
+# st_sfc(p1, crs = 4326) %>%
+#   mapview()
+```
+
+```{r, eval = FALSE, echo = TRUE}
+library(rnaturalearth)
+library(ggplot2)
+
+ne_jpn <- 
+  ne_states(country = "Japan", returnclass = "sf") %>% 
+  tibble::new_tibble(subclass = "sf")
+
+ne_wld <- 
+  ne_countries(returnclass = "sf") %>% 
+  tibble::new_tibble(subclass = "sf")
+
+plot(st_geometry(ne_wld))
+
+ggplot() + 
+  geom_sf(data = st_transform(ne_wld, 
+                              crs = "+proj=laea +y_0=0 +lon_0=155 +lat_0=-90 +ellps=WGS84 +no_defs"))
+
+st_crs(ne_jpn)
+
+ne_jpn %>% 
+  st_geometry() %>% 
+  plot(graticule = st_crs(4326))
+```
+
+```{r}
+sf_poi <- 
+  tibble::data_frame(
+  id = seq(1, 2),
+  lng = c(140.112, 140.12),
+  lat = c(36.083, 36.05)) %>% 
+  st_as_sf(coords = c("lng", "lat"), 
+           crs = 4326)
+
+sf_poi
+
+# sf_poi %>% 
+#   mapview::mapview()
+
+sf_poi %>% 
+  st_coordinates()
+
+sf_poi %>% 
+  dplyr::mutate(lng = st_coordinates(geometry)[, 1],
+                lat = st_coordinates(geometry)[, 2]) %>% 
+  st_set_geometry(NULL)
+```
+
+### 空間操作
+
+ジオメトリを操作することで、2点間の距離を求めたり、ポイントにバッファを待たせたりという処理が可能になります。ジオメトリの操作には次のものが含まれます。対応するsfパッケージの関数名を併記します。
+
+- 面積の計算... `st_area()`
+- 重心(セントロイド)の抽出... `st_centroid()`
+- 距離計算... `st_distance()`
+- 属性テーブルの結合... `st_join()`
+- ディゾルブ... `st_union()`
+- バッファリング... `st_buffer()`
+- ボロノイ分割... `st_voronoi()`
+
+```{r}
+library(units)
+```
+
+```{r}
+# 距離の算出には横メルカトル投影法の平面直角座標にしておきましょう
+p1 <- 
+  st_point(c(140.112, 36.083)) %>% 
+  st_sfc(crs = 2451)
+p2 <- 
+  st_point(c(139.677, 35.661)) %>% 
+  st_sfc(crs = 2451)
+
+st_distance(p1, p2)
+```
+
+単位はメートルですが、これをキロメートルあるいはマイルに変換するにはunitsパッケージの関数を利用します。
+
+```{r}
+units::set_units(st_distance(p1, p2), 
+                 km)
+units::set_units(st_distance(p1, p2), 
+                 mile)
+```
+
+### 空間隣接行列
+
+空間オブジェクト間の隣接関係を表す指標として
+「空間隣接行列」があります。
+
+これはオブジェクトの近接関係
+
+空間自己相関を扱う上で基礎となる理解となります。
+
+当該メッシュに対して
+
+- 隣接している = 1
+- 隣接指定ない = 0
+
+とすると隣接行列は
+
+```{r}
+p1 <-
+  st_point(c(0, 0))
+p2 <-
+  st_point(c(2, 2))
+
+st_relate(p1, p2)
+```
+
+3 * 3の格子状区画(グリッド)を考えます。
+
+```{r}
+sfc <-
+  st_sfc(st_point(c(0, 0)), 
+         st_point(c(3, 3)))
+
+sfc_grid <- 
+  sfc %>% 
+  st_make_grid(n = c(3, 3), 
+               what = "polygons")
+```
+
+`st_make_grid()`は任意の区画数のグリッドまたは区画の重心点を作成するのに便利な関数です。
+
+```{r, eval = FALSE, echo = TRUE}
+# plot(sfc_grid)
+
+sf_grid <- 
+  st_sf(sfc_grid) %>%
+  rename(geometry = sfc_grid) %>% 
+  mutate(id = paste0("x", 
+                     c(seq(7, 9),
+                       seq(4, 6),
+                       seq(1, 3))))
+
+# plot(sf_grid)
+# invisible(
+#   text(st_coordinates(st_centroid(sf_grid))[, 1], 
+#        st_coordinates(st_centroid(sf_grid))[, 2], 
+#        labels = 
+#          as.character(sf_grid$id), 
+#        cex = 2))
+
+library(ggplot2)
+ggplot() +
+  geom_sf(data = sf_grid) +
+  geom_text(data = sf_grid,
+            aes(x = st_coordinates(st_centroid(geometry))[, 1],
+                y = st_coordinates(st_centroid(geometry))[, 2],
+                label = id)) +
+  xlab(NULL) +
+  ylab(NULL) +
+  coord_sf(datum = NULL) +
+  theme_void()
+
+
+st_relate(sf_grid[5, ], 
+          sf_grid[1, ])
+
+st_relate(sf_grid[8, ], 
+          sf_grid[1, ])
+```
+
+隣接行列の表現方法としてエッジ、ルーク、クイーンがあります。
+
+### 重ね合わせ
+
+ポリゴンのオーバーレイ
+
+- 論理積: ポリゴンxに対して別のポリゴンyを重ね合わせ、各オブジェクトが交差している部分を抽出して新しいポリゴンを作る
+
+```{r, eval = FALSE, echo = TRUE}
+x <- 
+  st_polygon(list(
+  rbind(
+  st_point(c(1, 1)),
+  st_point(c(2, 1)),
+  st_point(c(2, 2)),
+  st_point(c(1, 2)),
+  st_point(c(1 ,1))
+)))
+
+
+plot(x)
+
+y <- 
+  geom_rot2(x / 1.2, 45) + 0.75
+
+ggplot() + 
+  geom_sf(data  = x) +
+  geom_sf(data = y) +
+  coord_sf(datum = NULL) +
+  theme_void()
+
+x <- 
+  x %>% 
+  st_sfc() %>% 
+  st_sf()
+
+y <- 
+  st_sf(y) %>% 
+  st_cast("POLYGON")
+
+st_join(x, y) %>% 
+  plot()
+st_join(x, y, join = st_disjoint) %>% 
+  plot()
+
+plot(x, col = "red")
+plot(y, col = "blue", add = TRUE)
+
+plot(st_union(x, y))
+plot(st_union(x, y, by_feature = TRUE)) # 同じ?
+
+st_join(x, y, join = st_overlaps) %>% 
+  plot()
+
+# 論理積
+st_intersection(x, y) %>% 
+  plot()
+# 削除
+st_difference(x, y) %>% 
+  plot()
+st_sym_difference(x, y) %>% 
+  plot()
+st_snap(x, y, tolerance = 0.5) %>% 
+  plot()
+```
+
+## sfオブジェクトの作成
+
+- データフレームの列に地物の形状 geometry と属性 attributes を格納する
+- simple featureのための3つのクラスを提供する
+    - `sf`: simple featureとobjectの属性情報を紐づける
+    - `sfc`: simple featureのgeometry情報をlist-columnとして持つ
+    - `sfg`: 個別のsimple featureを扱うfeature geometry
+    - 大きさとしては `sfg` < `sfc` < `sf`
+- sfオブジェクトの`geometry`列およびsfcオブジェクトは属性データをもたない。地物の形状 (geometry) を記録するだけ
+    - sfではgeometryをテキスト形式の[well-known text: (WKT)](https://ja.wikipedia.org/wiki/Well-known_text)で記述する。
+
+### sfg: simple feature geometry
+
+#### ポイント
+
+```{r}
+sfg_pt <- 
+  st_point(c(0, 0))
+
+sfg_pt
+
+st_geometry_type(sfg_pt)
+
+# st_point()にはポイントの座標を与えます
+st_point(c(1, 2)) # 2つの値はXY座標として利用されます
+st_point(c(1, 2, 3)) # XYに加え、Z座標を定義できます
+st_point(c(1, 2, 3), dim = "XYM") # dim引数を利用し、明示的に次元とその値を指定できます
+x <- 
+  st_point(c(1, 2, 3, 4)) # 4次元の座標には4つの値を与えます
+
+st_zm(x)
+```
+
+
+```{r}
+sfg_mpt <- 
+  c(st_point(c(0, 0)),
+    st_point(c(1, 1)))
+
+sfg_mpt
+```
+
+sfgオブジェクトでは演算処理が可能です。
+
+```{r}
+c(sfg_pt, sfg_pt + 1)
+```
+
+またsfgオブジェクトには`plot()`が適用できます。これにより、視覚的にジオメトリの形状を把握することが可能になります。`plot()`の詳細は後述します。
+
+```{r}
+plot(sfg_mpt)
+
+plot(c(sfg_pt, sfg_pt + 1), 
+     col = "red", 
+     pch = 16)
+```
+
+```{r}
+all.equal(sfg_mpt,
+          c(sfg_pt, sfg_pt + 1))
+```
+
+#### ライン
+
+```{r}
+sfg_line <- 
+  st_linestring(sfg_mpt)
+
+sfg_line
+```
+
+```{r}
+sfg_mline <- 
+  c(sfg_line,
+  sfg_line + 1)
+
+sfg_mline
+```
+
+```{r, eval = FALSE}
+plot(sfg_mline, add = TRUE)
+```
+
+#### ポリゴン
+
+```{r}
+# 起点（終点にもなる）を用意
+# 起点と終点は同じ座標
+sfg_pt <- 
+  st_point(c(1, 1))
+
+sfg_poly <- 
+  rbind(
+  sfg_pt, # 起点
+  st_point(c(2, 1)),
+  st_point(c(2, 2)),
+  st_point(c(1, 2)),
+  sfg_pt # 終点
+  ) %>% 
+  print() %>%
+  list() %>% 
+  st_polygon()
+```
+
+```{r, eval = FALSE, echo = TRUE}
+plot(sfg_poly)
+```
+
+```{r, eval = FALSE, echo = TRUE}
+# 閉じていないと怒られます
+rbind(
+  sfg_pt, # 起点
+  st_point(c(2, 1)),
+  st_point(c(2, 2)),
+  st_point(c(1, 2))
+  ) %>% 
+  list() %>% 
+  st_polygon()
+# Error in MtrxSet(x, dim, type = "POLYGON", needClosed = TRUE) : 
+#   polygons not (all) closed
+```
+
+
+```{r}
+sfg_poly_fault <- rbind(
+  sfg_pt,
+  st_point(c(2, 1)),
+  st_point(c(2, 2)),
+  st_point(c(0, 2)),
+  st_point(c(1, 2)),
+  sfg_pt) %>% 
+  print() %>%
+  list() %>% 
+  st_polygon()
+
+st_is_valid(sfg_poly)
+st_is_valid(sfg_poly_fault)
+```
+
+```{r, eval = FALSE}
+plot(sfg_poly_fault)
+```
+
+### sfc: simple feature list column
+
+sfcはsfgオブジェクトから構成されるオブジェクトです。`st_sfc()`にジオメトリを与えて作成します。引数にはジオメトリの他に、参照座標系を指定することができます。
+
+複数のジオメトリをもつこともでき、その実態はジオメトリの種類、参照座標系、矩形の範囲、欠損の数といった要素をもつリストです。ジオメトリの形状と位置に関する情報を持っています。
+
+```{r}
+st_sfc(sfg_pt)
+
+st_sfc(st_point(c(140.112, 36.083)), 
+       crs = 4326)
+
+```
+### sf: simple feature
+
+sfcに属性情報を追加したものがsfオブジェクトとして扱われます。`st_sf()`がsfオブジェクトを作成する関数となります。
+
+```{r}
+pt1 <- st_point(c(0, 1))
+pt2 <- st_point(c(1, 1))
+sfc <- st_sfc(pt1, pt2)
+
+sfc %>% 
+  st_sf()
+
+# a という属性情報を付与したsfオブジェクトを作成
+data.frame(a = 1:2, 
+           geometry = sfc) %>% 
+  st_sf()
+```
+
+## 読み込み
+
+**sf**での地理空間データの読み込み関数として`st_read()`があります。この関数を使うことで、地物情報を記録したファイルやPostGISデータベース上のデータをRで操作可能になります。
+
+### 日本語の文字化け
+
+一部のファイルでは日本語等のマルチバイト文字列が「文字化け」を起こしていることがあります。その場合、正しく読み込むために、次のように`options`引数を利用してファイルのエンコード形式を変更する必要があります。
+
+```{r, eval = FALSE, echo = TRUE}
+# ENCODING=CP932 の中にスペースを入れない
+st_read(dsn, options = c("ENCODING=CP932"))
+```
+
+
+### データベース
+
+## 他のクラスとsfへの相互変換
+
+csvファイル等に座標の値が列に記録されている場合、データフレームとして読み込んでおくことでsfオブジェクトとして扱うことができます。これには任意の列を座標として扱う`st_as_sf()`を利用します。
+
+```{r}
+sf_poi <- 
+  tibble::data_frame(
+  id = seq(1, 2),
+  lng = c(140.112, 140.12),
+  lat = c(36.083, 36.05)) %>% 
+  st_as_sf(coords = c("lng", "lat"),
+           crs = 4326)
+
+sf_poi
+```
+
+また、sfオブジェクトをデータフレームとして扱うには`st_set_geometry()`関数に`NULL`を指定してジオメトリ情報を除外します。
+
+```{r}
+sf_poi %>% 
+  st_set_geometry(value = NULL)
+```
+
+一方でこの方法では座標情報が失われてしまうので、列として座標値を残したい場合には次のようにする必要があります。`st_coordinate()`はジオメトリの座標を求める関数です。ジオメトリがポイントの場合はXY座標を返します。対象のジオメトリがポリゴンの場合には`st_centroid()`を使い、重心の座標に変換しておく等の処理が必要になります。
+
+```{r}
+sf_poi %>% 
+  dplyr::mutate(lng = st_coordinates(geometry)[, 1],
+                lat = st_coordinates(geometry)[, 2]) %>% 
+  st_set_geometry(NULL)
+```
+
+またsfでは、従来Rで地理空間情報データ（特にベクトルデータ）を扱うのに用いられているspパッケージのオブジェクトとの相互互換のための関数が用意されています。変換は次のように行います。
+
+```{r, eval = FALSE, echo = FALSE}
+# 以下では読み込めない
+# data(chicago, package = "spatstat")
+```
+
+```{r}
+library(spatstat)
+data(chicago)
+class(chicago)
+st_as_sf(chicago)
+```
+
+```{r}
+as_Spatial(sf_poi)
+```
+
+空間解析パッケージはsfをベースにしたものが増えていますが、現状ではまだまだspベースのパッケージが多いです。用途に応じてオブジェクトの変換を行うのが良いでしょう。
+
+

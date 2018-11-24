@@ -1,0 +1,18 @@
+---
+title: "参考文献・URL"
+home: false
+output:
+  html_document:
+    keep_md: true
+---
+
+## 全般
+
+### ラスタ
+
+- [Introduction to Geospatial Raster and Vector Data with R](https://datacarpentry.org/r-raster-vector-geospatial/)... DataCarpentryのコース
+
+
+## 1
+
+## 2

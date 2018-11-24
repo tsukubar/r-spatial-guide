@@ -1,0 +1,284 @@
+---
+title: "ラスタデータ"
+home: false
+output:
+  html_document:
+    keep_md: true
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, 
+                      eval = TRUE,
+                      base.url = "docs/.vuepress/public/",
+                      fig.path = "images/")
+```
+
+## この章で取り扱うデータ
+
+- [ALOS全球数値地表モデル](https://www.eorc.jaxa.jp/ALOS/aw3d30/index_j.htm) by JAXA... `単一バンド`
+- [LANDSAT]()... `マルチカラーバンド`
+
+ダウンロードしくてください。
+
+## ラスタデータの読み込み
+
+```{r}
+library(raster)
+```
+
+```{r}
+r_dsm <- 
+  raster(here::here("data-raw", "N035E139_AVE_DSM.tif"))
+```
+
+ラスタデータには、単一のバンドまたはレイヤーを持つものと複数のバンドを持つものとがあります。複数のバンドからなるラスタデータは特にマルチバンドデータ、マルチスペクトルイメージとも呼ばれます。バンドとは、ラスタを構成するセルの集合を指します。
+
+単一バンドのラスタデータには、標高データのように一つの値を記録するものや、白黒の航空写真のように波長域が一つに限定されるものが含まれます。対して衛星画像のラスタデータはマルチバンドの代表例です。衛星画像の撮影を行うセンサーは、特定の波長域(可視域、紫外線域、赤外線域など)での値を記録しています。
+
+LANDSATの説明...
+landsat-8
+- B2 (解像度 30m)
+- B3 (解像度 30m)
+- B4 (解像度 30m)
+
+
+このことはR上でラスタデータを操作する上で大事です。それはラスタのバンド数に応じて、適用する関数に違いがあるためです。
+
+- RasterLayer (`raster()`): 単一バンド 
+- RasterBrick (`brick()`): マルチバンドラスター向け (単一ファイル)
+- RasterStack (`stack()`): マルチバンドラスター向け (複数ファイル)
+
+```{r}
+tif_files_20180102 <- 
+  list.files(here::here("data-raw"),
+           pattern = "LC08_L1TP_107035_20180102_20180104_01_.+.TIF", 
+           full.names = TRUE)
+
+tif_files_20180814 <- 
+  list.files(here::here("data-raw"),
+           pattern = "LC08_L1TP_107035_20180814_20180814_01_.+.TIF", 
+           full.names = TRUE)
+```
+
+```{r}
+r_landsat_201801 <- 
+  stack(c(tif_files_20180102[1], 
+          tif_files_20180102[2],
+          tif_files_20180102[3]))
+
+r_landsat_201808 <- 
+  stack(c(tif_files_20180814[1], 
+          tif_files_20180814[2],
+          tif_files_20180814[3]))
+```
+
+rasterパッケージのオブジェクトはS4クラスとして扱われます。これはベクトル形式の地理空間データを扱うために広く使われてきたspパッケージと同様の機構となります。S4クラスのオブジェクトの特徴は、属性を参照するためにスロット (`@`)を利用することです。
+
+スロットにはデータとメタデータが記録されています。`slotNames()`を使い、読み込んだラスタオブジェクトのスロット名を確認し、スロットの要素を参照してみましょう。
+
+```{r}
+slotNames(r_dsm)
+```
+
+rasterパッケージが読み込むラスタデータのオブジェクトは、crsというスロットを持っています。これはデータの座標参照系を示すものです。参照は次のように、`オブジェクト名@crs`とします。
+
+```{r}
+r_dsm@crs
+```
+
+要素の参照は関数を使って実行することも可能です。
+
+```{r}
+crs(r_dsm)
+```
+
+スロットに記録されていない情報は、関数を使って調べられます。例えば`ncell()`はグリッドの数を返却する関数です。(セルの行数と列数はそれぞれ`nrows`、`ncols`スロットに記録されています。)
+
+```{r}
+# ラスタデータのグリッド数を調べる
+# r_dsm@nrows * r_dsm@ncols
+ncell(r_dsm)
+ncell(r_landsat_201801)
+```
+
+```{r}
+res(r_landsat_201801)
+```
+
+```{r}
+r_landsat_201801@layers[[1]]
+```
+
+
+### ラスタデータへの処理
+
+
+<!-- ref. http://tmizu23.hatenablog.com/entry/20091215/1260868350-->
+
+解像度、CRSの変更
+
+```{r, echo = TRUE, cache = TRUE}
+crs(r_dsm) # 先に確認しておく (この行は消す)
+crs_utm_z54 <- 
+  crs(r_landsat_201801, asText = TRUE)
+
+r_dsm_utm_z54 <- 
+  projectRaster(r_dsm, 
+                crs = crs_utm_z54, 
+                method = "ngb")
+
+plot(r_dsm_utm_z54) # ちょっと斜めになっているのを確認
+
+# r_landsat_201801_s <- 
+#   projectRaster(r_landsat_201801,
+#                 crs = crs_utm_z54,
+#                 method = "ngb",
+#                 res = 1)
+# res(r_landsat_201801_s)
+```
+
+切り抜き
+
+```{r, echo = TRUE}
+library(jpmesh)
+
+r_dsm_crop <- 
+  crop(
+  r_dsm,
+  extent(jpmesh::export_mesh(523973) %>% 
+                   sf::st_transform(crs = proj4string(r_dsm)) %>% 
+                   sf::st_bbox() %>% 
+                   as.vector() %>% 
+                   .[c(1, 3, 2, 4)] %>% 
+                   purrr::set_names(c("xmin", "xmax", 
+                                      "ymin", "ymax"))),
+  snap = "in"
+)
+
+plot(r_dsm_crop)
+```
+
+```{r, echo = TRUE}
+library(sf)
+library(jpmesh)
+r_dsm_crop_sp <- 
+  crop(r_dsm, 
+     as(export_mesh(523973), "Spatial")) %>% 
+  as.data.frame(xy = TRUE) %>% 
+  tibble::as_tibble()
+
+r_dsm_crop_sp %>% 
+  ggplot(aes(x, y, fill = N035E139_AVE_DSM)) +
+  geom_raster() +
+  scale_fill_gradientn(colors = topo.colors(15)) + 
+  coord_sf()
+
+# 1セルごとの値を取り出す
+extract(r_dsm, 
+     as(export_mesh(523973), "Spatial"),
+     df = TRUE)
+
+# 集計する
+extract(r_dsm, 
+     as(export_mesh(523973), "Spatial"),
+     fun = mean)
+
+poi <- 
+  st_point(c(139.479, 35.300)) %>% 
+  st_sfc(crs = 4326)
+# csrを修正してから〜
+# mapview::mapview(poi)
+extract(r_dsm, 
+     as(poi, "Spatial"),
+     buffer = 300,
+     fun = mean)
+
+poi <- 
+  st_point(c(139.479, 35.300)) %>% 
+  st_sfc(crs = 4326)
+
+```
+
+### NDVI
+
+(NIR - Red) / (NIR + Red)
+
+```{r, echo = TRUE}
+tif_files_20180814 <- 
+  list.files(here::here("data-raw"),
+           pattern = "LC08_L1TP_107035_20180814_20180814_01_RT_.+.TIF", 
+           full.names = TRUE)
+
+r_r201801 <- 
+  raster(tif_files_20180104[3])
+r_nir201801 <- 
+  raster(tif_files_20180104[4])
+
+r_ndvi201801 <- 
+  (r_nir201801 - r_r201801) / (r_nir201801 + r_r201801)
+
+
+r_r201808 <- 
+  raster(tif_files_20180814[3])
+r_nir201808 <- 
+  raster(tif_files_20180814[4])
+
+r_ndvi201808 <- 
+  (r_nir201808 - r_r201808) / (r_nir201808 + r_r201808)
+
+par(mfrow = c(1, 2),
+    mar = c(0.4, 0.65, 0.65, 0.4))
+plot(r_ndvi201801, axes = FALSE, box = FALSE)
+plot(r_ndvi201808, axes = FALSE, box = FALSE)
+dev.off()
+```
+
+### 簡単な可視化
+
+<!-- 独立させる? -->
+
+マルチバンドのラスタでは、バンドごとに出力されます。
+
+```{r, echo = TRUE}
+plot(r_dsm)
+```
+
+```{r, echo = TRUE}
+plot(r_landsat_201801)
+```
+
+```{r, echo = TRUE}
+plotRGB(r_landsat_201801, 
+        r = 3, g = 2, b = 1, 
+        scale = 65535,
+        # hist or lin
+        stretch = "hist")
+```
+
+```{r}
+# slideview
+```
+
+### starsパッケージ
+
+```{r}
+library(stars)
+```
+
+```{r}
+r_landsat_201801 <- 
+  read_stars(c(tif_files_20180104[5], 
+               tif_files_20180104[4],
+               tif_files_20180104[3]),
+             along = "band")
+```
+
+```{r}
+plot(r_landsat_201801)
+```
+
+```{r}
+mapview::slideview(r_r201801, r_nir201808)
+```
+
+
