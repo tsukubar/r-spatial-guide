@@ -1,0 +1,11 @@
+version: "3"
+services:
+  rstudio:
+    build: "."
+    ports:
+      - "8787:8787"
+      - "8080:8080"
+    volumes:
+      - ".:/home/rstudio/r-spatial-guide"
+    environment:
+      PASSWORD: $PASSWORD
