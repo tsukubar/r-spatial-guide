@@ -6,3 +6,7 @@ node_modules/
 *.lock
 docs/.vuepress/dist/
 .env
+docs/*.md
+cache/
+config.yml
+data-raw/
