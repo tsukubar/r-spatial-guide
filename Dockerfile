@@ -1,4 +1,4 @@
-FROM rocker/geospatial:3.5.1
+FROM rocker/geospatial:3.5.3
 
 # install dependency package
 RUN set -x && \
@@ -8,6 +8,8 @@ RUN set -x && \
     curl \
     gnupg \
     libssl-dev
+
+ARG GITHUB_PAT
 
 # "install nodejs. Use instead of 'curl -L git.io/nodebrew | perl - setup'" && \
 RUN set -x && \
