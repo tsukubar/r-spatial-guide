@@ -1,5 +1,5 @@
 module.exports = {
-  base: '',
+  base: '/r-spatial-guide/',
   locales: {
     '/': {
       lang: 'ja',
