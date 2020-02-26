@@ -30,7 +30,11 @@ module.exports = {
       '/',
         /* Geographic data in R */
        'introduction',
-       'simple-feature-for-r'
+       'simple-feature-for-r',
+       'spatial-data-handling',
+       'spatial-data-mapping',
+       'raster',
+       'statistical-learning'
     ],
     
     repo: 'tsukubar/r-spatial-guide',
